@@ -1,0 +1,4 @@
+[submodule "TWS-API"]
+	path = TWS-API
+	url = https://github.com/BCSharp/tws-api.git
+        branch = develop
