@@ -113,6 +113,13 @@ namespace IBApi.Reactive
         }
 
 
+        /// <summary>
+        ///     Disconnect from TWS.
+        /// </summary>
+        /// <remarks>
+        ///     The method returns immediately after the socket is closed, without waiting for TWS to tidy up.
+        ///     Do not use if you intend to connect again, as TWS may not be ready yet to accept a new connection using the same client ID.
+        /// </remarks>
         public void Disconnect()
         {
             if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
@@ -120,6 +127,22 @@ namespace IBApi.Reactive
             _state = State.Disconnected;
         }
 
+        /// <summary>
+        ///     Disconnect from TWS.
+        /// </summary>
+        /// <remarks>
+        ///     When the returned task completes, the client may connect again.
+        /// </remarks>
+        public async Task DisconnectAsync()
+        {
+            if (_state == State.Disconnected) return;
+            if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
+
+            _sender.eDisconnect();
+            // Give TWS some time to cleanup. There is no information how much is needed, but experiments show 2s is enough.
+            await Task.Delay(TimeSpan.FromSeconds(2));  
+            _state = State.Disconnected;
+        }
 
     }
 }
