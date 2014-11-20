@@ -71,9 +71,8 @@ namespace IBApi.Reactive
             // If not, wait for _orderIdReceived with a timeout
             return _orderIdReceived
                 .AsTask(timeout)
-                // Ambing with errors so that any exceptions from the wrapper will propagate to the task
                 .ToObservable()
-                .Amb(Errors.Where(_ => false).Select(_ => Unit.Default))
+                .MergeErrors(Errors)
                 .ToTask();
         }
 
