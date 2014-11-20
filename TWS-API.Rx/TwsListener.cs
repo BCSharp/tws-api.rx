@@ -5,9 +5,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.PlatformServices;
+using System.Reactive.Joins;
+using System.Reactive.Threading;
+using System.Reactive.Threading.Tasks;
+using System.Reactive.Disposables;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+
 using IBApi;
 using IBApi.Reactive;
 
@@ -60,7 +69,12 @@ namespace IBApi.Reactive
             }
 
             // If not, wait for _orderIdReceived with a timeout
-            return _orderIdReceived.AsTask(timeout);
+            return _orderIdReceived
+                .AsTask(timeout)
+                // Ambing with errors so that any exceptions from the wrapper will propagate to the task
+                .ToObservable()
+                .Amb(Errors.Where(_ => false).Select(_ => Unit.Default))
+                .ToTask();
         }
 
 
@@ -88,6 +102,65 @@ namespace IBApi.Reactive
         {
             // After OrderIdAvailable(), _orderId is guaranteed to be properly initialized.
             return Interlocked.Increment(ref _orderId) - 1; // -1 because Increment works like ++id and we want id++
+        }
+
+        #endregion
+
+        #region Error Management
+
+        /// <summary>
+        ///     Hot observable stream of errors and warnings from TWS.
+        /// </summary>
+        /// <remarks>
+        ///     Tuple elements are parameters of <see cref="Terror(int,int,string)"/>.
+        ///     TODO: C# 6.0: Replace tuple by a lean immutable class.
+        /// </remarks>
+        public IObservable<Tuple<int, int, string>> Errors 
+        { 
+            get { return _twsErrorsSub.AsObservable(); } 
+        }
+
+        ISubject<Tuple<int, int, string>> _twsErrorsSub = new Subject<Tuple<int, int, string>>();
+
+        /// <summary>
+        ///     Error or warning received from TWS
+        /// </summary>
+        /// <param name="id">
+        ///     Request ID associated with this error, if any.
+        ///     -1 means no particular request ID is related to this error.
+        /// </param>
+        /// <param name="errorCode">
+        ///     For codes <see href="https://www.interactivebrokers.com/en/software/api/api.htm"/>
+        /// </param>
+        /// <param name="errorMsg">
+        ///     Descriptive error message.
+        /// </param>
+        public override void error(int id, int errorCode, string errorMsg)
+        {
+            _twsErrorsSub.OnNext(Tuple.Create(id, errorCode, errorMsg));
+        }
+
+
+        /// <summary>
+        ///     An older version of error messages. Probably never used anymore.
+        /// </summary>
+        public override void error(string str)
+        {
+            _twsErrorsSub.OnNext(Tuple.Create(-1, 0, str));
+        }
+
+
+        /// <summary>
+        ///     Fatal exception occurred in the TWS-API library, leaving it in a potentially unstable state.
+        ///     Most likely a programming bug.
+        ///     Reinitialization recommended.
+        /// </summary>
+        /// <remarks>
+        ///     This error will set all observable streams into a faulted state, as no more data is guaranteed to be received.
+        /// </remarks>
+        public override void error(Exception ex)
+        {
+            _twsErrorsSub.OnError(ex);
         }
 
         #endregion

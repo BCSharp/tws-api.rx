@@ -97,6 +97,9 @@ namespace IBApi.Reactive
         /// <exception cref="TimeoutException">
         ///     Connection not established within the given timeout.
         /// </exception>
+        /// <exception cref="AggregateException">
+        ///     Exception(s) occured during making connection.
+        /// </exception>
         public void Connect(string host = null, int port = 0, int timeout = 10000)
         {
             try
@@ -120,6 +123,7 @@ namespace IBApi.Reactive
         ///     The method returns immediately after the socket is closed, without waiting for TWS to tidy up.
         ///     Do not use if you intend to connect again, as TWS may not be ready yet to accept a new connection using the same client ID.
         /// </remarks>
+        /// <seealso cref="DisconnectAsync"/>
         public void Disconnect()
         {
             if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
@@ -139,10 +143,13 @@ namespace IBApi.Reactive
             if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
 
             _sender.eDisconnect();
-            // Give TWS some time to cleanup. There is no information how much is needed, but experiments show 2s is enough.
+            // Give TWS some time to clean up. There is no information how much is needed, but experiments show 2s is enough.
             await Task.Delay(TimeSpan.FromSeconds(2));  
             _state = State.Disconnected;
         }
 
+
+        public IObservable<Tuple<int, int, string>> Errors
+        { get { return _listener.Errors; } }
     }
 }
