@@ -19,6 +19,8 @@ using System.Threading.Tasks;
 
 using IBApi;
 using IBApi.Reactive;
+using System.Collections.Concurrent;
+using System.Globalization;
 
 
 namespace IBApi.Reactive
@@ -163,5 +165,55 @@ namespace IBApi.Reactive
         }
 
         #endregion
+
+        #region Historical Data
+
+        ConcurrentDictionary<int, Tuple<ISubject<Bar>, bool>> _historicalDataDict = new ConcurrentDictionary<int, Tuple<ISubject<Bar>, bool>>();
+
+        public IObservable<Bar> GetHistoricalData(int reqId, bool intraday)
+        {
+            ISubject<Bar> historical_data = new Subject<Bar>();
+            _historicalDataDict.TryAdd(reqId, Tuple.Create(historical_data, intraday));  // always suceeds as reqId is unique
+            return historical_data.AsObservable();
+        }
+
+        public void DeleteHistoricalData(int reqId)
+        {
+            Tuple<ISubject<Bar>, bool> historical_data;
+            _historicalDataDict.TryRemove(reqId, out historical_data);
+        }
+
+        public override void historicalData(int reqId, string date, double open, double high, double low, double close, int volume, int count, double WAP, bool hasGaps)
+        {
+            Tuple<ISubject<Bar>, bool> historical_data;
+            if (_historicalDataDict.TryGetValue(reqId, out historical_data))
+            {
+                DateTime timestamp;
+                if (historical_data.Item2) // intraday
+                {
+                    long epochtime = long.Parse(date); // the "date" string is in epoch seconds
+                    timestamp = epoch.AddSeconds(epochtime);
+                }
+                else
+                {
+                    timestamp = DateTime.ParseExact(date, "yyyyMMdd", DateTimeFormatInfo.InvariantInfo);
+                    //timestamp = new DateTime(timestamp, DateTimeKind.Unspecified);
+                }
+                historical_data.Item1.OnNext(new Bar(timestamp.Ticks, (decimal)open, (decimal)high, (decimal)low, (decimal)close, volume, (decimal)WAP));
+            }
+        }
+
+        public override void historicalDataEnd(int reqId, string start, string end)
+        {
+            Tuple<ISubject<Bar>, bool> historical_data;
+            if (_historicalDataDict.TryGetValue(reqId, out historical_data))
+            {
+                historical_data.Item1.OnCompleted();
+            }
+        }
+
+        #endregion
+
+        readonly DateTime epoch = DateTime.Parse("1970-01-01T00:00:00Z").ToUniversalTime();
     }
 }

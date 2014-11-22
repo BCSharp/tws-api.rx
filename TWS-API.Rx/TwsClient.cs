@@ -6,6 +6,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reactive;
+using System.Reactive.PlatformServices;
+using System.Reactive.Joins;
+using System.Reactive.Threading;
+using System.Reactive.Threading.Tasks;
+using System.Reactive.Disposables;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
+using System.Threading;
+
 
 namespace IBApi.Reactive
 {
@@ -19,6 +30,7 @@ namespace IBApi.Reactive
 
         enum State { Disconnected, Connected, Disposed }
         State _state;
+        int _reqNum = 0;
 
 
         /// <summary>
@@ -161,5 +173,38 @@ namespace IBApi.Reactive
         /// </remarks>
         public IObservable<Tuple<int, int, string>> Errors
         { get { return _listener.Errors; } }
+
+
+        /// <summary>
+        ///     Create a cold observable of historical bar data.
+        ///     Data downloaded upon subscription.
+        /// </summary>
+        /// <remarks>
+        ///     Pacing logic is the responsibility of the subscriber(s).
+        /// </remarks>
+        /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/csharp/reqhistoricaldata.htm"/>
+        public IObservable<Bar> RequestHistoricalData(Contract contract, DateTime endDateTime, string duration, string barSizeSetting, string whatToShow, bool useRTH)
+        {
+            return Observable.Create<Bar>(obs =>
+            {
+                int reqNum = Interlocked.Increment(ref _reqNum);
+
+                var subs = _listener.GetHistoricalData(reqNum, barSizeSetting != "1 day").Subscribe(obs);
+                _sender.reqHistoricalData(reqNum, contract, endDateTime.ToUniversalTime().ToString("yyyyMMdd HH\\:mm\\:ss UTC"), duration, barSizeSetting, whatToShow, useRTH? 1:0, 2, null);
+
+                return () =>
+                {
+                    _sender.cancelHistoricalData(reqNum);
+                    subs.Dispose();
+                    _listener.DeleteHistoricalData(reqNum);
+                };
+            });
+        }
+
+
+        public IObservable<Bar> RequestHistoricalData(Contract contract, DateTimeOffset endDateTime, string duration, string barSizeSetting, string whatToShow, bool useRTH)
+        {
+            return RequestHistoricalData(contract, endDateTime.UtcDateTime, duration, barSizeSetting, whatToShow, useRTH);
+        }
     }
 }

@@ -51,6 +51,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bar.cs" />
     <Compile Include="TwsClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TwsListener.cs" />

@@ -1,11 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Reactive;
-using System.Reactive.Linq;
+using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
+using System.Reactive.Joins;
+using System.Reactive.Linq;
+using System.Reactive.PlatformServices;
+using System.Reactive.Subjects;
+using System.Reactive.Threading;
+using System.Reactive.Threading.Tasks;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 using IBApi;
 using IBApi.Reactive;
@@ -38,6 +45,51 @@ namespace HistoricalData
                     return;
                 } 
                 Console.WriteLine("Connected.");
+
+
+                var contract = new Contract()
+                {
+                    Symbol = "MSFT",
+                    Exchange = "SMART",
+                    SecType = "STK",
+                    Currency = "USD",
+                };
+
+                Console.WriteLine("Intraday data:");
+                IObservable<Bar> hdata = client.RequestHistoricalData(
+                    contract,
+                    DateTime.Now,
+                    duration: "1 D", // 1 day window
+                    barSizeSetting: "1 min",
+                    whatToShow: "TRADES",
+                    useRTH: true
+                );
+                // hdata is a cold observable; the request to TWS is sent on subscription
+                // Since Main() is not async, we cannot use await here
+                hdata.Do(Console.WriteLine).ToTask().Wait();
+
+                // This is what it would look like with await
+                //await hdata.Do(Console.WriteLine);
+
+                // It also can be done w/o using Do but with more ceremony.
+                // Since it is a cold observable, it has to be turned hot with Publish
+                //var pub = hdata.Publish();
+                //var sub = pub.Subscribe(Console.WriteLine);
+                //var con = pub.Connect();
+                //await pub;
+                //sub.Dispose();
+                //con.Dispose();
+
+                Console.WriteLine("Daily data:");
+                IObservable<Bar> hdata2 = client.RequestHistoricalData(
+                    contract,
+                    DateTime.Now,
+                    duration: "1 W", // 1 week window
+                    barSizeSetting: "1 day",
+                    whatToShow: "TRADES",
+                    useRTH: true
+                );
+                hdata2.Do(bar => Console.WriteLine(bar.ToString(TimeZoneInfo.Utc))).ToTask().Wait();
 
                 Console.WriteLine("Press ENTER to disconnect.");
                 Console.ReadLine();
