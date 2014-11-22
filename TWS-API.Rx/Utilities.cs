@@ -49,12 +49,12 @@ namespace IBApi.Reactive
                 return new CompositeDisposable(
                     lhs.Subscribe(
                         item => { if (!completed) obs.OnNext(item); },
-                        ex => { if (!completed) obs.OnError(ex); completed = true; },
-                        () => { if (!completed) obs.OnCompleted(); completed = true; }
+                        ex => { if (!completed) { obs.OnError(ex); completed = true; } },
+                        () => { if (!completed) { obs.OnCompleted(); completed = true; } }
                     ),
                     rhs.Subscribe(
                         _ => {},
-                        ex => { if (!completed) obs.OnError(ex); completed = true; }
+                        ex => { if (!completed) { obs.OnError(ex); completed = true; } }
                     )
                 );
             });
@@ -67,11 +67,17 @@ namespace IBApi.Reactive
                 bool completed = false;
 
                 return ostm.Subscribe(
-                    item => { if (!completed) obs.OnError(item); completed = true; },
-                    ex => { if (!completed) obs.OnError(ex); completed = true; },
-                    () => { if (!completed) obs.OnCompleted(); completed = true; }
+                    item => { if (!completed) { obs.OnError(item); completed = true; } },
+                    ex => { if (!completed) { obs.OnError(ex); completed = true; } },
+                    () => { if (!completed) { obs.OnCompleted(); completed = true; } }
                 );
             });
+        }
+
+
+        public static bool IsError(this CodeMsgPair msg)
+        {
+            return msg.Code < 1100 || msg.Code > 10000 || msg.Code == 1101;
         }
 
     }

@@ -158,8 +158,9 @@ namespace IBApi.Reactive
         ///     as fatal: after an exeption, the faulted TwsClient instance should be disposed (this may change in the future).
         ///     Also, if there are multiple exceptions reported, they are not aggregated; only thie first one is reported here.
         /// </remarks>
-        public IObservable<Tuple<int, int, string>> Errors
-        { get { return _listener.Errors; } }
+        /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/tables/api_message_codes.htm"/>
+        public IObservable<CodeMsgPair> Errors
+        { get { return _listener.Errors.Select(pair => pair.Item2); } }
 
 
         /// <summary>

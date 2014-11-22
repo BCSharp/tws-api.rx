@@ -62,8 +62,11 @@ namespace IBApi.Reactive
             var sub = new AsyncSubject<int>();
             _orderIdSubject = sub;
 
-            return sub
-                .MergeErrors(Errors);
+            return sub.MergeErrors(
+                Errors.Where(err => err.Item2.IsError())
+                      .Select(err => new ApplicationException(err.Item2.Message))
+                      .AsError()
+            );
         }
 
 
@@ -118,12 +121,12 @@ namespace IBApi.Reactive
         ///     Tuple elements are parameters of <see cref="Terror(int,int,string)"/>.
         ///     TODO: C# 6.0: Replace tuple by a lean immutable class.
         /// </remarks>
-        public IObservable<Tuple<int, int, string>> Errors 
+        public IObservable<Tuple<int, CodeMsgPair>> Errors 
         { 
             get { return _twsErrorsSub.AsObservable(); } 
         }
 
-        ISubject<Tuple<int, int, string>> _twsErrorsSub = new Subject<Tuple<int, int, string>>();
+        ISubject<Tuple<int, CodeMsgPair>> _twsErrorsSub = new Subject<Tuple<int, CodeMsgPair>>();
 
         /// <summary>
         ///     Error or warning received from TWS
@@ -140,7 +143,7 @@ namespace IBApi.Reactive
         /// </param>
         public override void error(int id, int errorCode, string errorMsg)
         {
-            _twsErrorsSub.OnNext(Tuple.Create(id, errorCode, errorMsg));
+            _twsErrorsSub.OnNext(Tuple.Create(id, new CodeMsgPair(errorCode, errorMsg)));
         }
 
 
@@ -149,7 +152,7 @@ namespace IBApi.Reactive
         /// </summary>
         public override void error(string str)
         {
-            _twsErrorsSub.OnNext(Tuple.Create(-1, 0, str));
+            _twsErrorsSub.OnNext(Tuple.Create(-1, new CodeMsgPair(0, str)));
         }
 
 
@@ -179,7 +182,7 @@ namespace IBApi.Reactive
 
             return historical_data.MergeErrors(
                 Errors.Where(err => err.Item1 == reqId)
-                      .Select(err => new ApplicationException(err.Item3))
+                      .Select(err => new ApplicationException(err.Item2.Message))
                       .AsError()
             );
         }

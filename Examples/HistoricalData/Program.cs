@@ -30,7 +30,7 @@ namespace HistoricalData
                 // The errors observable is always available
                 // Here we just print them all to the console
                 subscriptions.Add(client.Errors.Subscribe(
-                    et => Console.WriteLine("TWS message #{0}{2}: {1}", et.Item2, et.Item3, et.Item1 >= 0? String.Format(" (req: {0})", et.Item1): ""),
+                    et => Console.WriteLine("TWS message #{0}: {1}", et.Code, et.Message),
                     ex => Console.WriteLine("TWS Exception: {0}", ex.Message)
                 ));
 
