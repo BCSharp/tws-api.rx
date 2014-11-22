@@ -174,7 +174,12 @@ namespace IBApi.Reactive
         {
             ISubject<Bar> historical_data = new Subject<Bar>();
             _historicalDataDict.TryAdd(reqId, Tuple.Create(historical_data, intraday));  // always suceeds as reqId is unique
-            return historical_data.AsObservable();
+
+            return historical_data.MergeErrors(
+                Errors.Where(err => err.Item1 == reqId)
+                      .Select(err => new ApplicationException(err.Item3))
+                      .AsError()
+            );
         }
 
         public void DeleteHistoricalData(int reqId)
@@ -197,7 +202,6 @@ namespace IBApi.Reactive
                 else
                 {
                     timestamp = DateTime.ParseExact(date, "yyyyMMdd", DateTimeFormatInfo.InvariantInfo);
-                    //timestamp = new DateTime(timestamp, DateTimeKind.Unspecified);
                 }
                 historical_data.Item1.OnNext(new Bar(timestamp.Ticks, (decimal)open, (decimal)high, (decimal)low, (decimal)close, volume, (decimal)WAP));
             }

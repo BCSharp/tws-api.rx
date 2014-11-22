@@ -60,5 +60,19 @@ namespace IBApi.Reactive
             });
         }
 
+        public static IObservable<Unit> AsError(this IObservable<Exception> ostm)
+        {
+            return Observable.Create<Unit>(obs =>
+            {
+                bool completed = false;
+
+                return ostm.Subscribe(
+                    item => { if (!completed) obs.OnError(item); completed = true; },
+                    ex => { if (!completed) obs.OnError(ex); completed = true; },
+                    () => { if (!completed) obs.OnCompleted(); completed = true; }
+                );
+            });
+        }
+
     }
 }

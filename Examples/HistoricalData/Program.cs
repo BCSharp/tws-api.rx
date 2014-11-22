@@ -30,7 +30,7 @@ namespace HistoricalData
                 // The errors observable is always available
                 // Here we just print them all to the console
                 subscriptions.Add(client.Errors.Subscribe(
-                    et => Console.WriteLine("TWS message #{0}: {1}", et.Item2, et.Item3),
+                    et => Console.WriteLine("TWS message #{0}{2}: {1}", et.Item2, et.Item3, et.Item1 >= 0? String.Format(" (req: {0})", et.Item1): ""),
                     ex => Console.WriteLine("TWS Exception: {0}", ex.Message)
                 ));
 
@@ -66,13 +66,21 @@ namespace HistoricalData
                 );
                 // hdata is a cold observable; the request to TWS is sent on subscription
                 // Since Main() is not async, we cannot use await here
-                hdata.Do(Console.WriteLine).ToTask().Wait();
+                try
+                {
+                    hdata.Do(Console.WriteLine).Timeout(TimeSpan.FromSeconds(15)).Wait();
+                }
+                catch (TimeoutException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    return;
+                }
 
-                // This is what it would look like with await
+                // Example: this is what it would look like with await
                 //await hdata.Do(Console.WriteLine);
 
-                // It also can be done w/o using Do but with more ceremony.
-                // Since it is a cold observable, it has to be turned hot with Publish
+                // It also can be done w/o using Do() but with more ceremony.
+                // Since it is a cold observable, it has to be turned hot with Publish()
                 //var pub = hdata.Publish();
                 //var sub = pub.Subscribe(Console.WriteLine);
                 //var con = pub.Connect();
@@ -89,7 +97,7 @@ namespace HistoricalData
                     whatToShow: "TRADES",
                     useRTH: true
                 );
-                hdata2.Do(bar => Console.WriteLine(bar.ToString(TimeZoneInfo.Utc))).ToTask().Wait();
+                hdata2.Do(bar => Console.WriteLine(bar.ToString(TimeZoneInfo.Utc))).Wait();
 
                 Console.WriteLine("Press ENTER to disconnect.");
                 Console.ReadLine();
