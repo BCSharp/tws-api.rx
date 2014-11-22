@@ -37,7 +37,8 @@ namespace HistoricalData
                 Console.WriteLine("Connecting to TWS...");
                 try
                 {
-                    client.Connect();  // disposing will disconnect
+                    var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    client.Connect(ct: cts.Token);  // disposing will disconnect
                 }
                 catch 
                 {
@@ -60,7 +61,7 @@ namespace HistoricalData
                     contract,
                     DateTime.Now,
                     duration: "1 D", // 1 day window
-                    barSizeSetting: "1 min",
+                    barSizeSetting: "30 mins",
                     whatToShow: "TRADES",
                     useRTH: true
                 );

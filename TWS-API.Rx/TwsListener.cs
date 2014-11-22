@@ -37,58 +37,51 @@ namespace IBApi.Reactive
         }
 
 
-        #region Order ID Management
+        #region Connectionn and Order ID Management
 
         /// Order IDs have to be unique within the scope of each client connection.
         /// Since one client connection can have multiple clients, running on different threads,
         /// this class centralizes order ID management. 
 
         int _orderId;
-        readonly ManualResetEvent _orderIdReceived = new ManualResetEvent(initialState: false);
+        ISubject<int> _orderIdSubject;
 
 
         /// <summary>
         ///     Make sure that a valid order ID is received from JTS. 
-        ///     Thread-safe, but it is sufficient (and recommended) to call it only once.
-        ///     Must be called before a call to <see cref="GetNewOrderId"/>.
+        ///     Must be called before connection requested and awaited before a call to <see cref="GetNewOrderId"/>.
         /// </summary>
         /// <returns>
-        ///     A task that completes when an order ID is available
-        ///     or cancels if no valid order ID received from TWS within the given timeout.
-        ///     The latter contition usually means there is a connection problem.
+        ///     An observable stream that completes when an order ID is available.
+        ///     The stream value is the next valid order ID as reported by TWS.
+        ///     Note that this value is useful for debugging purposes only.
+        ///     For new orders, use <see cref="GetNewOrderId"/>.
         /// </returns>
-        /// <param name="timeout">
-        ///     Timeout for the task returned. Use <see cref="Timeout.InfiniteTimeSpan"/> to disable the timeout.
-        /// </param>
-        public Task OrderIdAvailable(TimeSpan timeout)
+        public IObservable<int> OrderIdAvailable()
         {
-            // First check whether we have already received an order ID; it is being sent right after connect
-            if (_orderIdReceived.WaitOne(0))
-            {
-                var tcs = new TaskCompletionSource<Unit>();
-                tcs.SetResult(Unit.Default);
-                return tcs.Task;
-            }
+            var sub = new AsyncSubject<int>();
+            _orderIdSubject = sub;
 
-            // If not, wait for _orderIdReceived with a timeout
-            return _orderIdReceived
-                .AsTask(timeout)
-                .ToObservable()
-                .MergeErrors(Errors)
-                .ToTask();
+            return sub
+                .MergeErrors(Errors);
         }
 
 
         /// <summary>
         ///     EWrapper callback.
-        ///     Only the first callback is effective, subsequent calls are ignored.
+        ///     Only the first callback is effectively setting the ID.
         /// </summary>
         public override void nextValidId(int orderId)
         {
-            if (!_orderIdReceived.WaitOne(0)) // set it only once
+            // Set it only once
+            Interlocked.CompareExchange(ref _orderId, orderId, 0);
+
+            // Push through Rx network if possible
+            var sub = _orderIdSubject;
+            if (sub != null)
             {
-                _orderId = orderId;
-                _orderIdReceived.Set();
+                sub.OnNext(orderId);
+                sub.OnCompleted();
             }
         }
 
@@ -101,8 +94,17 @@ namespace IBApi.Reactive
         /// </returns>
         public int GetNewOrderId()
         {
-            // After OrderIdAvailable(), _orderId is guaranteed to be properly initialized.
+            // After OrderIdAvailable() completes, _orderId is guaranteed to be properly initialized.
             return Interlocked.Increment(ref _orderId) - 1; // -1 because Increment works like ++id and we want id++
+        }
+
+        /// <summary>
+        ///     EWrapper callback.
+        ///     Delete infromation whether order ID sent after connect is received.
+        /// </summary>
+        public override void connectionClosed()
+        {
+            _orderIdSubject = null;
         }
 
         #endregion

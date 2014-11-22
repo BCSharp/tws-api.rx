@@ -84,21 +84,21 @@ namespace IBApi.Reactive
         /// <param name="port">
         ///     Optional override of the port number specified in the constructor.
         /// </param>
-        /// <param name="timeout">
-        ///     Timeout for establishing the connection in miliseconds.
-        ///     Use <see cref="Timeout.Inifinite"/> to disable the timeout.
+        /// <param name="ct">
+        ///     Optional canellation token. Note that cancellation is cooperative.
         /// </param>
         /// <returns>
         ///     Task that completes when the connection is established and the API client is ready to use,
-        ///     or cancels on a timeout.
+        ///     or cancels on <paramref name="ct"/>.
         /// </returns>
-        public async Task ConnectAsync(string host = null, int port = 0, int timeout = 10000)
+        public async Task ConnectAsync(string host = null, int port = 0, CancellationToken ct = default(CancellationToken))
         {
             if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
             if (_state == State.Connected) throw new InvalidOperationException("TwsClient already connected.");
 
+            var connectionEstablished = _listener.OrderIdAvailable();
             _sender.eConnect(host ?? _defaultHost, port > 0? port : _defaultPort, _clientId);
-            await _listener.OrderIdAvailable(TimeSpan.FromMilliseconds(timeout));
+            await connectionEstablished.ToTask(ct);
             _state = State.Connected;
         }
 
@@ -106,25 +106,12 @@ namespace IBApi.Reactive
         /// <summary>
         ///     Synchronous version of <see cref="ConnectAsync"/>.
         /// </summary>
-        /// <exception cref="TimeoutException">
-        ///     Connection not established within the given timeout.
-        /// </exception>
         /// <exception cref="AggregateException">
         ///     Exception(s) occured during making connection.
         /// </exception>
-        public void Connect(string host = null, int port = 0, int timeout = 10000)
+        public void Connect(string host = null, int port = 0, CancellationToken ct = default(CancellationToken))
         {
-            try
-            {
-                ConnectAsync(host, port, timeout).Wait();
-            }
-            catch (AggregateException ex)
-            {
-                if (ex.InnerException is TaskCanceledException)  // TODO: Refactor for C# 6.0
-                    throw new TimeoutException("Connection failed.");
-                else
-                    throw;
-            }
+            ConnectAsync(host, port, ct).Wait();
         }
 
 
