@@ -97,7 +97,11 @@ namespace IBApi.Reactive
             if (_state == State.Connected) throw new InvalidOperationException("TwsClient already connected.");
 
             var connectionEstablished = _listener.OrderIdAvailable();
-            _sender.eConnect(host ?? _defaultHost, port > 0? port : _defaultPort, _clientId);
+            // eConnect may block for long
+            await Task.Run(() =>
+                _sender.eConnect(host ?? _defaultHost, port > 0 ? port : _defaultPort, _clientId),
+                ct
+            );
             await connectionEstablished.ToTask(ct);
             _state = State.Connected;
         }
@@ -111,7 +115,7 @@ namespace IBApi.Reactive
         /// </exception>
         public void Connect(string host = null, int port = 0, CancellationToken ct = default(CancellationToken))
         {
-            ConnectAsync(host, port, ct).Wait();
+            ConnectAsync(host, port, ct).Wait(ct);
         }
 
 
