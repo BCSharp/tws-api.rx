@@ -36,14 +36,10 @@ namespace IBApi.Reactive
         /// <param name="timestamp">
         ///     Elapsed 100ns units from 1/1/1 in UTC timezone till the beginning of bar period.
         /// </param>
-        /// <param name="id">
-        ///     Contract ID.
-        /// </param>
         /// 
-        public Bar(long timestamp, int id)
+        public Bar(long timestamp)
         {
             this._timestamp = timestamp;
-            this._contractId = id;
             Open = Decimal.MinValue;
             High = Decimal.MinValue;
             Low = Decimal.MinValue;
@@ -55,24 +51,12 @@ namespace IBApi.Reactive
 
         /// <summary>
         ///     Construct a Bar object with given quotes.
-        ///     Contract ID is set to not present (-1).
         /// </summary>
-        /// <seealso cref="Bar(long, int)"/>
+        /// <seealso cref="Bar(long)"/>
         /// 
         public Bar(long timestamp, decimal open, decimal high, decimal low, decimal close, long volume, decimal wap)
-            : this(timestamp, -1, open, high, low, close, volume, wap)
-        {}
-
-
-        /// <summary>
-        ///     Construct a Bar object with given quotes.
-        /// </summary>
-        /// <seealso cref="Bar(long, decimal, decimal, decimal, decimal, long, decimal)"/>
-        /// 
-        public Bar(long timestamp, int id, decimal open, decimal high, decimal low, decimal close, long volume, decimal wap)
         {
             this._timestamp = timestamp;
-            this._contractId = id;
             Open = open + Zero00;
             High = high + Zero00;
             Low = low + Zero00;
@@ -84,7 +68,6 @@ namespace IBApi.Reactive
 
         private readonly decimal Zero00 = 0.00m;
         private readonly long _timestamp;   	            // begin of bar stamp in UTC ticks
-        private int _contractId;				            // id of the contract; must be >= 0; -1 if not initialized
 
         public decimal Open { get; private set; }
         public decimal High { get; private set; }
@@ -115,12 +98,6 @@ namespace IBApi.Reactive
         }
 
 
-        public int ContractId
-        {
-            get { return _contractId; }
-        }
-
-
         public override String ToString()
         {
             return ToString(TimeZoneInfo.Local);
@@ -130,14 +107,12 @@ namespace IBApi.Reactive
         {
             DateTime ts = Timestamp(tz);
             if (IsEmpty)
-                return String.Format("{0) |{1}|(empty)",
-                    new DateTimeOffset(ts, tz.GetUtcOffset(ts)),
-                    _contractId
+                return String.Format("{0) |(empty)",
+                    new DateTimeOffset(ts, tz.GetUtcOffset(ts))
                 );
             else
-                return String.Format("{0} {1}|{2},{3},{4},{5},{6}|{7}",
+                return String.Format("{0} |{1},{2},{3},{4},{5}|{6}",
                     new DateTimeOffset(ts, tz.GetUtcOffset(ts)),
-                    _contractId >= 0? String.Format("|{0}", _contractId) : String.Empty,
                     Open, High, Low, Close, Volume,
                     Wap != Decimal.MinValue ? Wap.ToString() : String.Empty
                 );
