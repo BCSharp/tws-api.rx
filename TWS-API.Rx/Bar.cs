@@ -57,16 +57,15 @@ namespace IBApi.Reactive
         public Bar(long timestamp, decimal open, decimal high, decimal low, decimal close, long volume, decimal wap)
         {
             this._timestamp = timestamp;
-            Open = open + Zero00;
-            High = high + Zero00;
-            Low = low + Zero00;
-            Close = close + Zero00;
+            Open = open;
+            High = high;
+            Low = low;
+            Close = close;
             Volume = volume;
             Wap = wap;
         }
 
 
-        private readonly decimal Zero00 = 0.00m;
         private readonly long _timestamp;   	            // begin of bar stamp in UTC ticks
 
         public decimal Open { get; private set; }

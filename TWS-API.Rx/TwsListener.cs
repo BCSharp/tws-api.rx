@@ -171,6 +171,7 @@ namespace IBApi.Reactive
 
         #endregion
 
+
         #region Historical Data
 
         ConcurrentDictionary<int, Tuple<ISubject<Bar>, bool>> _historicalDataDict = new ConcurrentDictionary<int, Tuple<ISubject<Bar>, bool>>();
@@ -208,7 +209,7 @@ namespace IBApi.Reactive
                 {
                     timestamp = DateTime.ParseExact(date, "yyyyMMdd", DateTimeFormatInfo.InvariantInfo);
                 }
-                historical_data.Item1.OnNext(new Bar(timestamp.Ticks, (decimal)open, (decimal)high, (decimal)low, (decimal)close, volume, (decimal)WAP));
+                historical_data.Item1.OnNext(new Bar(timestamp.Ticks, (decimal)open + Zero00, (decimal)high + Zero00, (decimal)low + Zero00, (decimal)close + Zero00, volume, (decimal)WAP));
             }
         }
 
@@ -223,6 +224,68 @@ namespace IBApi.Reactive
 
         #endregion
 
+
+        #region Account Updates
+
+        ISubject<AccountData> _portfolioSub = new ReplaySubject<AccountData>();
+
+        public IObservable<AccountData> GetPortfolioData()
+        {
+            return _portfolioSub.MergeErrors(Errors);
+        }
+
+        public override void updatePortfolio(Contract contract, int position, double marketPrice, double marketValue,
+                                    double averageCost, double unrealizedPNL, double realizedPNL, string accountName)
+        {
+            try
+            {
+                var posLine = new PositionLine
+                (
+                    accountName,
+                    contract.SecType,
+                    contract.Symbol,
+                    contract.Expiry,
+                    position,
+                    (decimal)marketPrice + Zero00,
+                    (decimal)marketValue + Zero00,
+                    (decimal)averageCost + Zero00,
+                    (decimal)unrealizedPNL + Zero00,
+                    (decimal)realizedPNL + Zero00
+                );
+
+                _portfolioSub.OnNext(new AccountData(posLine));
+            }
+            catch (Exception ex)
+            {
+                _twsErrorsSub.OnError(ex);
+            }
+        }
+
+
+        public override void updateAccountValue(string key, string val, string currency, string accountName)
+        {
+                _portfolioSub.OnNext(new AccountData(accountName, key, val, currency));
+        }
+
+
+        public override void updateAccountTime(string timeStamp)
+        {
+            // timeStamp is in format "HH:mm" (or "H:mm"?) local time.
+            _portfolioSub.OnNext(new AccountData("", "AccountTime", timeStamp, "hrs"));
+        }
+
+
+        public override void accountDownloadEnd(string accountName)
+        {
+            _portfolioSub.OnCompleted();
+        }
+
+
+
+        #endregion
+
+
         readonly DateTime epoch = DateTime.Parse("1970-01-01T00:00:00Z").ToUniversalTime();
+        readonly decimal Zero00 = 0.00m;
     }
 }

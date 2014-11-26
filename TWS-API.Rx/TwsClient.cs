@@ -198,5 +198,14 @@ namespace IBApi.Reactive
         {
             return RequestHistoricalData(contract, endDateTime.UtcDateTime, duration, barSizeSetting, whatToShow, useRTH);
         }
+
+
+        public IObservable<AccountData> RequestPortfolioSnapshot()
+        {
+            _sender.reqAccountUpdates(true, null);
+            var obs = _listener.GetPortfolioData();
+            obs.Subscribe(_ => {}, ex => _sender.reqAccountUpdates(false, null), () => _sender.reqAccountUpdates(false, null));
+            return obs;
+        }
     }
 }

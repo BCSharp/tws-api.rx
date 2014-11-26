@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSharpAPI", "..\TWS-API\sou
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{9727DE73-BD4D-43E1-97DF-ECF9367DE86B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortfolioData", "Examples\PortfolioData\PortfolioData.csproj", "{69E9D89B-EBA8-4945-B8D8-EE9A14B7F95E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,10 @@ Global
 		{8EDE0744-96C2-40B0-A8DC-37DF79370203}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8EDE0744-96C2-40B0-A8DC-37DF79370203}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8EDE0744-96C2-40B0-A8DC-37DF79370203}.Release|Any CPU.Build.0 = Release|Any CPU
+		{69E9D89B-EBA8-4945-B8D8-EE9A14B7F95E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{69E9D89B-EBA8-4945-B8D8-EE9A14B7F95E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{69E9D89B-EBA8-4945-B8D8-EE9A14B7F95E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{69E9D89B-EBA8-4945-B8D8-EE9A14B7F95E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -42,5 +48,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{3FA56EAB-586E-4D61-B2AD-F7B40213067D} = {9727DE73-BD4D-43E1-97DF-ECF9367DE86B}
 		{B4D2982B-2277-4355-A678-372152046DF5} = {9727DE73-BD4D-43E1-97DF-ECF9367DE86B}
+		{69E9D89B-EBA8-4945-B8D8-EE9A14B7F95E} = {9727DE73-BD4D-43E1-97DF-ECF9367DE86B}
 	EndGlobalSection
 EndGlobal
