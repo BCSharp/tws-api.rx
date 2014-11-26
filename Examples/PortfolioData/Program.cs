@@ -30,7 +30,7 @@ namespace HistoricalData
                 // The errors observable is always available
                 // Here we just print them all to the console
                 subscriptions.Add(client.Errors.Subscribe(
-                    et => Console.WriteLine("TWS message #{0}: {1}", et.Code, et.Message),
+                    et => Console.WriteLine("TWS {2} #{0}: {1}", et.Code, et.Message, et.IsError()? "error" : "message"),
                     ex => Console.WriteLine("TWS Exception: {0}", ex.Message)
                 ));
 
@@ -51,6 +51,7 @@ namespace HistoricalData
                 subscriptions.Add(client.RequestPortfolioSnapshot()
                     .Where(acc =>             // This is a lot of data, filter out some
                                 acc.PositionLine != null
+                               || acc.Key.StartsWith("AccountTime")
                                || acc.Key.StartsWith("Available")
                                || acc.Key.StartsWith("Cash")
                                || acc.Key.StartsWith("Equity")

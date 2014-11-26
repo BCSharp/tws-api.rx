@@ -173,6 +173,7 @@ namespace IBApi.Reactive
         /// </summary>
         /// <remarks>
         ///     Pacing logic is the responsibility of the subscriber(s).
+        ///     This method is thread-safe.
         /// </remarks>
         /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/csharp/reqhistoricaldata.htm"/>
         public IObservable<Bar> RequestHistoricalData(Contract contract, DateTime endDateTime, string duration, string barSizeSetting, string whatToShow, bool useRTH)
@@ -193,19 +194,41 @@ namespace IBApi.Reactive
             });
         }
 
-
+        /// <summary>
+        ///     The same as <see cref="RequestHistoricalData(Contract,DateTime,string,string,string,bool)"/> but using DateTimeOffset as <paramref name="enddateTime"/>.
+        /// </summary>
+        /// <remarks>
+        ///     Pacing logic is the responsibility of the subscriber(s).
+        ///     This method is thread-safe.
+        /// </remarks>
+        /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/csharp/reqhistoricaldata.htm"/>
         public IObservable<Bar> RequestHistoricalData(Contract contract, DateTimeOffset endDateTime, string duration, string barSizeSetting, string whatToShow, bool useRTH)
         {
             return RequestHistoricalData(contract, endDateTime.UtcDateTime, duration, barSizeSetting, whatToShow, useRTH);
         }
 
 
-        public IObservable<AccountData> RequestPortfolioSnapshot()
+        /// <summary>
+        ///     Request a snapshot of portfolio data for the given account.
+        /// </summary>
+        /// <param name="accountName">
+        ///     The account name to access. Use null for default account.
+        /// </param>
+        /// <returns>
+        ///     Cold observable of account data, position line and account time together.
+        ///     The observable may be subscribed to multiple times but it will always yield the same data,
+        ///     captured at the moment of the call to this method rather than at the moment of subscription.
+        ///     Call this method again to receive a newer snapshot.
+        /// </returns>
+        /// <remarks>
+        ///     TWS-API can handle only one request at a time so this method serializes requests asynchronously.
+        /// </remarks>
+        /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/csharp/reqaccountupdates.htm"/>
+        public IObservable<AccountData> RequestPortfolioSnapshot(string accountName = null)
         {
-            _sender.reqAccountUpdates(true, null);
-            var obs = _listener.GetPortfolioData();
-            obs.Subscribe(_ => {}, ex => _sender.reqAccountUpdates(false, null), () => _sender.reqAccountUpdates(false, null));
-            return obs;
+            accountName = accountName ?? String.Empty;
+            var ostm = _listener.GetPortfolioSnapshot(accountName, enable => _sender.reqAccountUpdates(enable, accountName));
+            return ostm;
         }
     }
 }

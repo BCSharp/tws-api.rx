@@ -227,11 +227,41 @@ namespace IBApi.Reactive
 
         #region Account Updates
 
-        ISubject<AccountData> _portfolioSub = new ReplaySubject<AccountData>();
+        /*
+         * Account updates from TWS API have a number of limitations.
+         * The major one is that there can be only one update request active at any time.
+         * To work around that limitation we will queue simultaneous requests for different accounts
+         * until the current one completes.
+         */
+        ISubject<AccountData> _portfolioSub;
+        Action<bool> _enableAccountUpdates;
+        string _accountName;
+        object _accountUpdatesGate = new object();
+        Queue<Tuple<ISubject<AccountData>, string,  Action<bool>>> _accountUpdatesQueue = new Queue<Tuple<ISubject<AccountData>, string, Action<bool>>>();
 
-        public IObservable<AccountData> GetPortfolioData()
+        public IObservable<AccountData> GetPortfolioSnapshot(string accountName, Action<bool> enable)
         {
-            return _portfolioSub.MergeErrors(Errors);
+            lock (_accountUpdatesGate)
+            {
+                if (_accountName == null) // no update in progress, start a new one
+                {
+                    _portfolioSub = new ReplaySubject<AccountData>();
+                    _accountName = accountName;
+                    _enableAccountUpdates = enable;
+                    enable(true); // start
+                    return _portfolioSub.MergeErrors(Errors);
+                }
+                else if (_accountName == accountName) // reuse the one in progress
+                {
+                    return _portfolioSub.MergeErrors(Errors);
+                }
+                else // queue request
+                {
+                    ISubject<AccountData> portfolioSub = new ReplaySubject<AccountData>();
+                    _accountUpdatesQueue.Enqueue(Tuple.Create(portfolioSub, accountName, enable));
+                    return portfolioSub.MergeErrors(Errors);
+                }
+            }
         }
 
         public override void updatePortfolio(Contract contract, int position, double marketPrice, double marketValue,
@@ -253,7 +283,8 @@ namespace IBApi.Reactive
                     (decimal)realizedPNL + Zero00
                 );
 
-                _portfolioSub.OnNext(new AccountData(posLine));
+                var sub = _portfolioSub;
+                if (sub != null) sub.OnNext(new AccountData(posLine));
             }
             catch (Exception ex)
             {
@@ -264,20 +295,44 @@ namespace IBApi.Reactive
 
         public override void updateAccountValue(string key, string val, string currency, string accountName)
         {
-                _portfolioSub.OnNext(new AccountData(accountName, key, val, currency));
+            var sub = _portfolioSub;
+            if (sub != null) sub.OnNext(new AccountData(accountName, key, val, currency));
         }
 
 
         public override void updateAccountTime(string timeStamp)
         {
             // timeStamp is in format "HH:mm" (or "H:mm"?) local time.
-            _portfolioSub.OnNext(new AccountData("", "AccountTime", timeStamp, "hrs"));
+            var sub = _portfolioSub;
+            if (sub != null) sub.OnNext(new AccountData(_accountName, "AccountTime", timeStamp, "hrs"));
         }
 
 
         public override void accountDownloadEnd(string accountName)
         {
-            _portfolioSub.OnCompleted();
+            lock (_accountUpdatesGate)
+            {
+                if (_portfolioSub != null)
+                {
+                    _portfolioSub.OnCompleted();
+                    _portfolioSub = null;
+                }
+                if (_enableAccountUpdates != null)
+                {
+                    _enableAccountUpdates(false);
+                    _enableAccountUpdates = null;
+                }
+                _accountName = null;
+
+                if (_accountUpdatesQueue.Count > 0)
+                {
+                    var next_request = _accountUpdatesQueue.Dequeue();
+                    _portfolioSub = next_request.Item1;
+                    _accountName = next_request.Item2;
+                    _enableAccountUpdates = next_request.Item3;
+                    _enableAccountUpdates(true);
+                }
+            }
         }
 
 
