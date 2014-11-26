@@ -178,8 +178,16 @@ namespace IBApi.Reactive
         /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/csharp/reqhistoricaldata.htm"/>
         public IObservable<Bar> RequestHistoricalData(Contract contract, DateTime endDateTime, string duration, string barSizeSetting, string whatToShow, bool useRTH)
         {
+            if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
+
             return Observable.Create<Bar>(obs =>
             {
+                if (_state != State.Connected) 
+                { 
+                    obs.OnError(new InvalidOperationException("TwsClient not connected."));
+                    return () => {};
+                }
+
                 int reqNum = Interlocked.Increment(ref _reqNum);
 
                 var subs = _listener.GetHistoricalData(reqNum, barSizeSetting != "1 day").Subscribe(obs);
@@ -226,6 +234,9 @@ namespace IBApi.Reactive
         /// <seealso href="https://www.interactivebrokers.com/en/software/api/apiguide/csharp/reqaccountupdates.htm"/>
         public IObservable<AccountData> RequestPortfolioSnapshot(string accountName = null)
         {
+            if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
+            if (_state != State.Connected) throw new InvalidOperationException("TwsClient not connected.");
+
             accountName = accountName ?? String.Empty;
             var ostm = _listener.GetPortfolioSnapshot(accountName, enable => _sender.reqAccountUpdates(enable, accountName));
             return ostm;
