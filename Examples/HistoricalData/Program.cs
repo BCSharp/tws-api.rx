@@ -83,10 +83,10 @@ namespace HistoricalData
                 // It also can be done w/o using Do() but with more ceremony.
                 // Since it is a cold observable, it has to be turned hot with Publish()
                 //var pub = hdata.Publish();
-                //var sub = pub.Subscribe(Console.WriteLine);
+                //var subj = pub.Subscribe(Console.WriteLine);
                 //var con = pub.Connect();
                 //await pub;
-                //sub.Dispose();
+                //subj.Dispose();
                 //con.Dispose();
 
                 Console.WriteLine("Daily data:");

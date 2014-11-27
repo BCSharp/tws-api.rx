@@ -44,7 +44,7 @@ namespace IBApi.Reactive
         /// this class centralizes order ID management. 
 
         int _orderId;
-        ISubject<int> _orderIdSubject;
+        ISubject<int> _orderIdSubj;
 
 
         /// <summary>
@@ -59,10 +59,10 @@ namespace IBApi.Reactive
         /// </returns>
         public IObservable<int> OrderIdAvailable()
         {
-            var sub = new AsyncSubject<int>();
-            _orderIdSubject = sub;
+            var subj = new AsyncSubject<int>();
+            _orderIdSubj = subj;
 
-            return sub.MergeErrors(
+            return subj.MergeErrors(
                 Errors.Where(err => err.Item2.IsError())
                       .Select(err => new ApplicationException(err.Item2.Message))
                       .AsError()
@@ -80,11 +80,11 @@ namespace IBApi.Reactive
             Interlocked.CompareExchange(ref _orderId, orderId, 0);
 
             // Push through Rx network if possible
-            var sub = _orderIdSubject;
-            if (sub != null)
+            var subj = _orderIdSubj;
+            if (subj != null)
             {
-                sub.OnNext(orderId);
-                sub.OnCompleted();
+                subj.OnNext(orderId);
+                subj.OnCompleted();
             }
         }
 
@@ -107,7 +107,7 @@ namespace IBApi.Reactive
         /// </summary>
         public override void connectionClosed()
         {
-            _orderIdSubject = null;
+            _orderIdSubj = null;
         }
 
         #endregion
@@ -123,10 +123,10 @@ namespace IBApi.Reactive
         /// </remarks>
         public IObservable<Tuple<int, CodeMsgPair>> Errors 
         { 
-            get { return _twsErrorsSub.AsObservable(); } 
+            get { return _twsErrorsSubj.AsObservable(); } 
         }
 
-        ISubject<Tuple<int, CodeMsgPair>> _twsErrorsSub = new Subject<Tuple<int, CodeMsgPair>>();
+        ISubject<Tuple<int, CodeMsgPair>> _twsErrorsSubj = new Subject<Tuple<int, CodeMsgPair>>();
 
         /// <summary>
         ///     Error or warning received from TWS
@@ -143,7 +143,7 @@ namespace IBApi.Reactive
         /// </param>
         public override void error(int id, int errorCode, string errorMsg)
         {
-            _twsErrorsSub.OnNext(Tuple.Create(id, new CodeMsgPair(errorCode, errorMsg)));
+            _twsErrorsSubj.OnNext(Tuple.Create(id, new CodeMsgPair(errorCode, errorMsg)));
         }
 
 
@@ -152,7 +152,7 @@ namespace IBApi.Reactive
         /// </summary>
         public override void error(string str)
         {
-            _twsErrorsSub.OnNext(Tuple.Create(-1, new CodeMsgPair(0, str)));
+            _twsErrorsSubj.OnNext(Tuple.Create(-1, new CodeMsgPair(0, str)));
         }
 
 
@@ -166,7 +166,7 @@ namespace IBApi.Reactive
         /// </remarks>
         public override void error(Exception ex)
         {
-            _twsErrorsSub.OnError(ex);
+            _twsErrorsSubj.OnError(ex);
         }
 
         #endregion
@@ -233,39 +233,82 @@ namespace IBApi.Reactive
          * To work around that limitation we will queue simultaneous requests for different accounts
          * until the current one completes.
          */
-        ISubject<AccountData> _portfolioSub;
-        Action<bool> _enableAccountUpdates;
-        string _accountName;
+
         object _accountUpdatesGate = new object();
-        Queue<Tuple<ISubject<AccountData>, string,  Action<bool>>> _accountUpdatesQueue = new Queue<Tuple<ISubject<AccountData>, string, Action<bool>>>();
+        ISubject<AccountData> _portfolioSnapshotSubj;
+        Action<bool> _enableSnapshotAccountUpdates;
+        string _activeSnapshotAccountName;
+        Queue<Tuple<ISubject<AccountData>, string,  Action<bool>>> _accountSnapshotRequestsQueue = new Queue<Tuple<ISubject<AccountData>, string, Action<bool>>>();
 
         public IObservable<AccountData> GetPortfolioSnapshot(string accountName, Action<bool> enable)
         {
             lock (_accountUpdatesGate)
             {
-                if (_accountName == null) // no update in progress, start a new one
+                if (_activeSnapshotAccountName == null) // no update in progress, start a new one
                 {
-                    _portfolioSub = new ReplaySubject<AccountData>();
-                    _accountName = accountName;
-                    _enableAccountUpdates = enable;
+                    _portfolioSnapshotSubj = new ReplaySubject<AccountData>();
+                    _activeSnapshotAccountName = accountName;
+                    _enableSnapshotAccountUpdates = enable;
                     enable(true); // start
-                    return _portfolioSub.MergeErrors(Errors);
+                    return _portfolioSnapshotSubj.MergeErrors(Errors);
                 }
-                else if (_accountName == accountName) // reuse the one in progress
+                else if (_activeSnapshotAccountName == accountName) // reuse the one in progress
                 {
-                    return _portfolioSub.MergeErrors(Errors);
+                    return _portfolioSnapshotSubj.MergeErrors(Errors);
                 }
                 else // queue request
                 {
-                    ISubject<AccountData> portfolioSub = new ReplaySubject<AccountData>();
-                    _accountUpdatesQueue.Enqueue(Tuple.Create(portfolioSub, accountName, enable));
-                    return portfolioSub.MergeErrors(Errors);
+                    ISubject<AccountData> portfolioSubj = new ReplaySubject<AccountData>();
+                    _accountSnapshotRequestsQueue.Enqueue(Tuple.Create(portfolioSubj, accountName, enable));
+                    return portfolioSubj.MergeErrors(Errors);
                 }
             }
         }
 
+        ISubject<AccountData> _portfolioSubj;
+        IObservable<AccountData> _portfolioOstm;
+        Action<bool> _enableAccountUpdates;
+        string _activeAccountName;
+
+        public IObservable<AccountData> GetPortfolioData(string accountName, Action<bool> enable)
+        {
+            lock (_accountUpdatesGate)
+            {
+                if (_activeAccountName == accountName) // reuse the one in progress
+                {
+                    return _portfolioOstm;
+                }
+                if (_activeAccountName != null) // update in progress, terminate the old one
+                {
+                    _portfolioSubj.OnCompleted();
+                }
+                // create new subscription
+                _portfolioSubj = new Subject<AccountData>();
+                _activeAccountName = accountName;
+                _enableAccountUpdates = enable;
+                enable(true); // start
+                return _portfolioOstm = _portfolioSubj.MergeErrors(Errors);
+            }
+        }
+
+        public void DeletePortfolioData(IObservable<AccountData> ostm)
+        {
+            lock (_accountUpdatesGate)
+            {
+                if (_portfolioOstm == ostm) // the active one is the one to delete
+                {
+                    _portfolioOstm = null;
+                    _portfolioSubj = null;
+                    _activeAccountName = null;
+                    _enableAccountUpdates(false);
+                    _enableAccountUpdates = null;
+                }
+            }
+        }
+
+
         public override void updatePortfolio(Contract contract, int position, double marketPrice, double marketValue,
-                                    double averageCost, double unrealizedPNL, double realizedPNL, string accountName)
+                                             double averageCost, double unrealizedPNL, double realizedPNL, string accountName)
         {
             try
             {
@@ -283,28 +326,31 @@ namespace IBApi.Reactive
                     (decimal)realizedPNL + Zero00
                 );
 
-                var sub = _portfolioSub;
-                if (sub != null) sub.OnNext(new AccountData(posLine));
+                var subj = _portfolioSnapshotSubj;
+                if (subj == null) subj = _portfolioSubj;
+                if (subj != null) subj.OnNext(new AccountData(posLine));
             }
             catch (Exception ex)
             {
-                _twsErrorsSub.OnError(ex);
+                _twsErrorsSubj.OnError(ex);
             }
         }
 
 
         public override void updateAccountValue(string key, string val, string currency, string accountName)
         {
-            var sub = _portfolioSub;
-            if (sub != null) sub.OnNext(new AccountData(accountName, key, val, currency));
+            var subj = _portfolioSnapshotSubj;
+            if (subj == null) subj = _portfolioSubj;
+            if (subj != null) subj.OnNext(new AccountData(accountName, key, val, currency));
         }
 
 
         public override void updateAccountTime(string timeStamp)
         {
             // timeStamp is in format "HH:mm" (or "H:mm"?) local time.
-            var sub = _portfolioSub;
-            if (sub != null) sub.OnNext(new AccountData(_accountName, "AccountTime", timeStamp, "hrs"));
+            var subj = _portfolioSnapshotSubj;
+            if (subj == null) subj = _portfolioSubj;
+            if (subj != null) subj.OnNext(new AccountData(_activeSnapshotAccountName, "AccountTime", timeStamp, "hrs"));
         }
 
 
@@ -312,25 +358,25 @@ namespace IBApi.Reactive
         {
             lock (_accountUpdatesGate)
             {
-                if (_portfolioSub != null)
+                if (_portfolioSnapshotSubj != null)
                 {
-                    _portfolioSub.OnCompleted();
-                    _portfolioSub = null;
+                    _portfolioSnapshotSubj.OnCompleted();
+                    _portfolioSnapshotSubj = null;
                 }
-                if (_enableAccountUpdates != null)
+                if (_enableSnapshotAccountUpdates != null)
                 {
-                    _enableAccountUpdates(false);
-                    _enableAccountUpdates = null;
+                    _enableSnapshotAccountUpdates(false);
+                    _enableSnapshotAccountUpdates = null;
                 }
-                _accountName = null;
+                _activeSnapshotAccountName = null;
 
-                if (_accountUpdatesQueue.Count > 0)
+                if (_accountSnapshotRequestsQueue.Count > 0)
                 {
-                    var next_request = _accountUpdatesQueue.Dequeue();
-                    _portfolioSub = next_request.Item1;
-                    _accountName = next_request.Item2;
-                    _enableAccountUpdates = next_request.Item3;
-                    _enableAccountUpdates(true);
+                    var next_request = _accountSnapshotRequestsQueue.Dequeue();
+                    _portfolioSnapshotSubj = next_request.Item1;
+                    _activeSnapshotAccountName = next_request.Item2;
+                    _enableSnapshotAccountUpdates = next_request.Item3;
+                    _enableSnapshotAccountUpdates(true);
                 }
             }
         }

@@ -241,5 +241,45 @@ namespace IBApi.Reactive
             var ostm = _listener.GetPortfolioSnapshot(accountName, enable => _sender.reqAccountUpdates(enable, accountName));
             return ostm;
         }
+
+
+        /// <summary>
+        ///     This method provides an observable that does not complete by itself but is kept updated with any changes to the account.
+        /// </summary>
+        /// <remarks>
+        ///     This method is thread-safe but because of the limitations of TWS-API, only one account can be serverd at a time.
+        ///     Connecting to a subscription to another account will force the currently active one to complete.
+        ///     This is not a problem for Individual Accounts, Financial Advisors with multiple accounts should prefer
+        ///     other methods.
+        /// </remarks>
+        /// <param name="accountName">
+        ///     The account name to access. Use null for default account.
+        /// </param>
+        /// <returns>
+        ///     Dormant hot connectable observable, turns hot on Connect().
+        /// </returns>
+        public IConnectableObservable<AccountData> RequestPortfolioData(string accountName = null)
+        {
+            if (_state == State.Disposed) throw new ObjectDisposedException("TwsClient");
+
+            accountName = accountName ?? String.Empty;
+            return Observable.Create<AccountData>(obs =>
+            {
+                if (_state != State.Connected) 
+                { 
+                    obs.OnError(new InvalidOperationException("TwsClient not connected."));
+                    return () => {};
+                }
+
+                var ostm = _listener.GetPortfolioData(accountName, enable => _sender.reqAccountUpdates(enable, accountName));
+                var subs = ostm.Subscribe(obs);
+
+                return () =>
+                {
+                    subs.Dispose();
+                    _listener.DeletePortfolioData(ostm);
+                };
+            }).Publish();
+        }
     }
 }

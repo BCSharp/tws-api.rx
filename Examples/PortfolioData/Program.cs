@@ -17,9 +17,9 @@ using System.Threading.Tasks;
 using IBApi;
 using IBApi.Reactive;
 
-namespace HistoricalData
+namespace PortfolioData
 {
-    class Program
+    static class Program
     {
         static void Main(string[] args)
         {
@@ -47,9 +47,30 @@ namespace HistoricalData
                 } 
                 Console.WriteLine("Connected.");
 
+                Console.WriteLine("Requesting protfolio snapshot...");
+                var snapshot = client.RequestPortfolioSnapshot();
+                subscriptions.Add(snapshot.SubscribeToConsole());
+                snapshot.Wait(); // let the snapshot be fully printed on console before going further
 
-                subscriptions.Add(client.RequestPortfolioSnapshot()
-                    .Where(acc =>             // This is a lot of data, filter out some
+                var live = client.RequestPortfolioData();
+                subscriptions.Add(live.SubscribeToConsole());
+
+                Console.WriteLine("Press ENTER to start live updates, ENTER again to stop.");
+                Console.ReadLine();
+                var live_connect = live.Connect();
+                Console.ReadLine();
+                live_connect.Dispose();
+
+                Console.WriteLine("Press ENTER to disconnect.");
+                Console.ReadLine();
+            }
+            Console.WriteLine("Finished.");
+        }
+
+        static IDisposable SubscribeToConsole(this IObservable<AccountData> ostm)
+        {
+            return ostm
+                    .Where(acc =>             // This is many lines of data, filter out some for brevity
                                 acc.PositionLine != null
                                || acc.Key.StartsWith("AccountTime")
                                || acc.Key.StartsWith("Available")
@@ -66,7 +87,7 @@ namespace HistoricalData
                             if (acc.PositionLine != null)
                                 Console.WriteLine(
                                     "Position|qty: {0}|cost: {1}|price: {2}|{3}:{4}{5}",
-                                    acc.PositionLine.Position, 
+                                    acc.PositionLine.Position,
                                     acc.PositionLine.AverageCost,
                                     acc.PositionLine.Price,
                                     acc.PositionLine.SecType,
@@ -76,14 +97,7 @@ namespace HistoricalData
                         },
                         ex => Console.WriteLine("Exception: {0}", ex.Message),
                         () => Console.WriteLine("Portfolio snapshot completed.")
-                    )
-                );
-
-
-                Console.WriteLine("Press ENTER to disconnect.");
-                Console.ReadLine();
-            }
-            Console.WriteLine("Finished.");
+                    );
         }
     }
 }
