@@ -50,14 +50,16 @@ namespace PortfolioData
                 Console.WriteLine("Requesting protfolio snapshot...");
                 var snapshot = client.RequestPortfolioSnapshot();
                 subscriptions.Add(snapshot.SubscribeToConsole());
-                snapshot.Wait(); // let the snapshot be fully printed on console before going further
 
                 var live = client.RequestPortfolioData();
                 subscriptions.Add(live.SubscribeToConsole());
 
-                Console.WriteLine("Press ENTER to start live updates, ENTER again to stop.");
+                snapshot.Wait(); // let the snapshot be fully printed on console before going further
+                Console.WriteLine("Press ENTER to start live updates, \nENTER again to request stapshot update in the middle of live updates, \nthen ENTER to stop live updates.");
                 Console.ReadLine();
                 var live_connect = live.Connect();
+                Console.ReadLine();
+                subscriptions.Add(client.RequestPortfolioSnapshot().SubscribeToConsole());
                 Console.ReadLine();
                 live_connect.Dispose();
 

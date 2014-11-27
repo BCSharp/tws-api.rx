@@ -202,8 +202,8 @@ namespace IBApi.Reactive
                 DateTime timestamp;
                 if (historical_data.Item2) // intraday
                 {
-                    long epochtime = long.Parse(date); // the "date" string is in epoch seconds
-                    timestamp = epoch.AddSeconds(epochtime);
+                    long epochtime = long.Parse(date); // the "date" string is in Epoch seconds
+                    timestamp = Epoch.AddSeconds(epochtime);
                 }
                 else
                 {
@@ -235,26 +235,47 @@ namespace IBApi.Reactive
          */
 
         object _accountUpdatesGate = new object();
-        ISubject<AccountData> _portfolioSnapshotSubj;
+        ISubject<AccountData> _portfolioSubj;
+
         Action<bool> _enableSnapshotAccountUpdates;
         string _activeSnapshotAccountName;
         Queue<Tuple<ISubject<AccountData>, string,  Action<bool>>> _accountSnapshotRequestsQueue = new Queue<Tuple<ISubject<AccountData>, string, Action<bool>>>();
+
+        private void StopAccountUpdates(Action<bool> enable)
+        {
+            if (_portfolioSubj != null)
+            {
+                using (Errors.Where(err => err.Item2.Code == 2100).Subscribe(_ => { lock (_portfolioSubj) Monitor.Pulse(_portfolioSubj); }))
+                lock (_portfolioSubj)
+                {
+                    enable(false);
+                    // wait till account updates are fully disabled
+                    Monitor.Wait(_portfolioSubj, 10000);
+                }
+                _portfolioSubj = null; 
+            }
+        }
 
         public IObservable<AccountData> GetPortfolioSnapshot(string accountName, Action<bool> enable)
         {
             lock (_accountUpdatesGate)
             {
+                if (_portfolioSubj != null && _portfolioLiveSubj == _portfolioSubj) // pre-empt live update
+                {
+                    StopAccountUpdates(_enableLiveAccountUpdates);
+                }
+
                 if (_activeSnapshotAccountName == null) // no update in progress, start a new one
                 {
-                    _portfolioSnapshotSubj = new ReplaySubject<AccountData>();
+                    _portfolioSubj = new ReplaySubject<AccountData>();
                     _activeSnapshotAccountName = accountName;
                     _enableSnapshotAccountUpdates = enable;
                     enable(true); // start
-                    return _portfolioSnapshotSubj.MergeErrors(Errors);
+                    return _portfolioSubj.MergeErrors(Errors);
                 }
                 else if (_activeSnapshotAccountName == accountName) // reuse the one in progress
                 {
-                    return _portfolioSnapshotSubj.MergeErrors(Errors);
+                    return _portfolioSubj.MergeErrors(Errors);
                 }
                 else // queue request
                 {
@@ -265,43 +286,51 @@ namespace IBApi.Reactive
             }
         }
 
-        ISubject<AccountData> _portfolioSubj;
-        IObservable<AccountData> _portfolioOstm;
-        Action<bool> _enableAccountUpdates;
-        string _activeAccountName;
+        // in the group below: if any is not null, all are not null
+        ISubject<AccountData> _portfolioLiveSubj;
+        Action<bool> _enableLiveAccountUpdates;
+        string _activeLiveAccountName;
 
-        public IObservable<AccountData> GetPortfolioData(string accountName, Action<bool> enable)
+        public IDisposable SubscribeToPortfolioData(IObserver<AccountData> obs, string accountName, Action<bool> enable, out object token)
         {
             lock (_accountUpdatesGate)
             {
-                if (_activeAccountName == accountName) // reuse the one in progress
+                if (_activeLiveAccountName != null) // live update in progress, terminate the old one
                 {
-                    return _portfolioOstm;
+                    if (_portfolioLiveSubj == _portfolioSubj)
+                    {
+                        StopAccountUpdates(_enableLiveAccountUpdates);
+                    }
+                    _portfolioLiveSubj.OnCompleted();
                 }
-                if (_activeAccountName != null) // update in progress, terminate the old one
+                _portfolioLiveSubj = new Subject<AccountData>();
+                _activeLiveAccountName = accountName;
+                _enableLiveAccountUpdates = enable;
+                
+                var subs = _portfolioLiveSubj.MergeErrors(Errors).Subscribe(obs);
+                if (_portfolioSubj == null) // free spot to request account updates
                 {
-                    _portfolioSubj.OnCompleted();
+                    _portfolioSubj = _portfolioLiveSubj;
+                    enable(true);
                 }
-                // create new subscription
-                _portfolioSubj = new Subject<AccountData>();
-                _activeAccountName = accountName;
-                _enableAccountUpdates = enable;
-                enable(true); // start
-                return _portfolioOstm = _portfolioSubj.MergeErrors(Errors);
+                token = _portfolioLiveSubj;
+                return subs;
             }
         }
 
-        public void DeletePortfolioData(IObservable<AccountData> ostm)
+        public void UnsubscribeFromPortfolioData(object token)
         {
             lock (_accountUpdatesGate)
             {
-                if (_portfolioOstm == ostm) // the active one is the one to delete
+                if (_portfolioLiveSubj == token) // the current live one is the one to delete
                 {
-                    _portfolioOstm = null;
-                    _portfolioSubj = null;
-                    _activeAccountName = null;
-                    _enableAccountUpdates(false);
-                    _enableAccountUpdates = null;
+                    if (_portfolioLiveSubj == _portfolioSubj)
+                    {
+                        StopAccountUpdates(_enableLiveAccountUpdates);
+                    }
+                    _portfolioLiveSubj = null;
+                    _activeLiveAccountName = null;
+                    _enableLiveAccountUpdates = null;
                 }
             }
         }
@@ -326,8 +355,7 @@ namespace IBApi.Reactive
                     (decimal)realizedPNL + Zero00
                 );
 
-                var subj = _portfolioSnapshotSubj;
-                if (subj == null) subj = _portfolioSubj;
+                var subj = _portfolioSubj;
                 if (subj != null) subj.OnNext(new AccountData(posLine));
             }
             catch (Exception ex)
@@ -339,8 +367,7 @@ namespace IBApi.Reactive
 
         public override void updateAccountValue(string key, string val, string currency, string accountName)
         {
-            var subj = _portfolioSnapshotSubj;
-            if (subj == null) subj = _portfolioSubj;
+            var subj = _portfolioSubj;
             if (subj != null) subj.OnNext(new AccountData(accountName, key, val, currency));
         }
 
@@ -348,37 +375,47 @@ namespace IBApi.Reactive
         public override void updateAccountTime(string timeStamp)
         {
             // timeStamp is in format "HH:mm" (or "H:mm"?) local time.
-            var subj = _portfolioSnapshotSubj;
-            if (subj == null) subj = _portfolioSubj;
+            var subj = _portfolioSubj;
             if (subj != null) subj.OnNext(new AccountData(_activeSnapshotAccountName, "AccountTime", timeStamp, "hrs"));
         }
 
 
         public override void accountDownloadEnd(string accountName)
         {
-            lock (_accountUpdatesGate)
-            {
-                if (_portfolioSnapshotSubj != null)
-                {
-                    _portfolioSnapshotSubj.OnCompleted();
-                    _portfolioSnapshotSubj = null;
-                }
-                if (_enableSnapshotAccountUpdates != null)
-                {
-                    _enableSnapshotAccountUpdates(false);
-                    _enableSnapshotAccountUpdates = null;
-                }
-                _activeSnapshotAccountName = null;
+            if (_portfolioSubj == _portfolioLiveSubj) return; // do not complete live streams
 
-                if (_accountSnapshotRequestsQueue.Count > 0)
+            _portfolioSubj.OnCompleted();
+
+            Task.Factory.StartNew(() => 
+            {
+                try
                 {
-                    var next_request = _accountSnapshotRequestsQueue.Dequeue();
-                    _portfolioSnapshotSubj = next_request.Item1;
-                    _activeSnapshotAccountName = next_request.Item2;
-                    _enableSnapshotAccountUpdates = next_request.Item3;
-                    _enableSnapshotAccountUpdates(true);
+                    lock (_accountUpdatesGate)
+                    {
+                        if (_enableSnapshotAccountUpdates != null)
+                        {
+                            StopAccountUpdates(_enableSnapshotAccountUpdates);
+                            _enableSnapshotAccountUpdates = null;
+                        }
+                        _activeSnapshotAccountName = null;
+
+                        if (_accountSnapshotRequestsQueue.Count > 0)
+                        {
+                            var next_request = _accountSnapshotRequestsQueue.Dequeue();
+                            _portfolioSubj = next_request.Item1;
+                            _activeSnapshotAccountName = next_request.Item2;
+                            _enableSnapshotAccountUpdates = next_request.Item3;
+                            _enableSnapshotAccountUpdates(true);
+                        }
+                        else if (_portfolioLiveSubj != null)
+                        {
+                            _portfolioSubj = _portfolioLiveSubj;
+                            _enableLiveAccountUpdates(true);
+                        }
+                    }
                 }
-            }
+                catch {}
+            }, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
         }
 
 
@@ -386,7 +423,7 @@ namespace IBApi.Reactive
         #endregion
 
 
-        readonly DateTime epoch = DateTime.Parse("1970-01-01T00:00:00Z").ToUniversalTime();
+        readonly DateTime Epoch = DateTime.Parse("1970-01-01T00:00:00Z").ToUniversalTime();
         readonly decimal Zero00 = 0.00m;
     }
 }

@@ -271,13 +271,13 @@ namespace IBApi.Reactive
                     return () => {};
                 }
 
-                var ostm = _listener.GetPortfolioData(accountName, enable => _sender.reqAccountUpdates(enable, accountName));
-                var subs = ostm.Subscribe(obs);
+                object token;
+                var subs = _listener.SubscribeToPortfolioData(obs, accountName, enable => _sender.reqAccountUpdates(enable, accountName), out token);
 
                 return () =>
                 {
                     subs.Dispose();
-                    _listener.DeletePortfolioData(ostm);
+                    _listener.UnsubscribeFromPortfolioData(token);
                 };
             }).Publish();
         }
