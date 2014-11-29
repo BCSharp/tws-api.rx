@@ -38,27 +38,30 @@ namespace IBApi.Reactive
             return tcs.Task;
         }
 
+
         // Not thread-safe, both observables have to be synchronized.
-        // Fortunately, this is the case n the usage within this library
+        // Fortunately, this is the case in the usage within this library
         public static IObservable<T> MergeErrors<T,U>(this IObservable<T> lhs, IObservable<U> rhs)
         {
             return Observable.Create<T>(obs =>
             {
                 bool completed = false;
+                IDisposable rhs_subs = rhs.Subscribe(
+                    _ => {},
+                    ex => { if (!completed) { obs.OnError(ex); completed = true; } }
+                );
 
                 return new CompositeDisposable(
                     lhs.Subscribe(
                         item => { if (!completed) obs.OnNext(item); },
-                        ex => { if (!completed) { obs.OnError(ex); completed = true; } },
-                        () => { if (!completed) { obs.OnCompleted(); completed = true; } }
+                        ex => { if (!completed) { obs.OnError(ex);   completed = true; rhs_subs.Dispose(); } },
+                        () => { if (!completed) { obs.OnCompleted(); completed = true; rhs_subs.Dispose(); } }
                     ),
-                    rhs.Subscribe(
-                        _ => {},
-                        ex => { if (!completed) { obs.OnError(ex); completed = true; } }
-                    )
+                    rhs_subs
                 );
             });
         }
+
 
         public static IObservable<Unit> AsError(this IObservable<Exception> ostm)
         {
@@ -68,8 +71,8 @@ namespace IBApi.Reactive
 
                 return ostm.Subscribe(
                     item => { if (!completed) { obs.OnError(item); completed = true; } },
-                    ex => { if (!completed) { obs.OnError(ex); completed = true; } },
-                    () => { if (!completed) { obs.OnCompleted(); completed = true; } }
+                    ex =>   { if (!completed) { obs.OnError(ex);   completed = true; } },
+                    () =>   { if (!completed) { obs.OnCompleted(); completed = true; } }
                 );
             });
         }
