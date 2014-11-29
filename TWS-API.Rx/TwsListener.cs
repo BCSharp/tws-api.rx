@@ -279,9 +279,9 @@ namespace IBApi.Reactive
                 }
                 else // queue request
                 {
-                    ISubject<AccountData> portfolioSubj = new ReplaySubject<AccountData>();
-                    _accountSnapshotRequestsQueue.Enqueue(Tuple.Create(portfolioSubj, accountName, enable));
-                    return portfolioSubj.MergeErrors(Errors);
+                    ISubject<AccountData> newPortfolioSubj = new ReplaySubject<AccountData>();
+                    _accountSnapshotRequestsQueue.Enqueue(Tuple.Create(newPortfolioSubj, accountName, enable));
+                    return newPortfolioSubj.MergeErrors(Errors);
                 }
             }
         }
@@ -382,9 +382,10 @@ namespace IBApi.Reactive
 
         public override void accountDownloadEnd(string accountName)
         {
-            if (_portfolioSubj == _portfolioLiveSubj) return; // do not complete live streams
+            var subj = _portfolioSubj;
+            if (subj == _portfolioLiveSubj) return; // do not complete live streams
 
-            _portfolioSubj.OnCompleted();
+            subj.OnCompleted();
 
             Task.Factory.StartNew(() => 
             {
