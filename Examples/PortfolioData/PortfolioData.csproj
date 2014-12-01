@@ -63,13 +63,13 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\TWS-API\source\csharpclient\client\CSharpAPI.csproj">
-      <Project>{8ede0744-96c2-40b0-a8dc-37df79370203}</Project>
-      <Name>CSharpAPI</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\TWS-API.Rx\TWS-API.Rx.csproj">
       <Project>{d350f867-2122-4c87-b9bc-c5e7a8a56709}</Project>
       <Name>TWS-API.Rx</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\TWS-API\source\csharpclient\client\CSharpAPI.csproj">
+      <Project>{8ede0744-96c2-40b0-a8dc-37df79370203}</Project>
+      <Name>CSharpAPI</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
