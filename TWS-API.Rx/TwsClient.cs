@@ -172,6 +172,7 @@ namespace IBApi.Reactive
         ///     Data downloaded upon subscription.
         /// </summary>
         /// <remarks>
+        ///     If <param name="endDateTime"/> is of unspecified kind, local time is assumed.
         ///     Pacing logic is the responsibility of the subscriber(s).
         ///     This method is thread-safe.
         /// </remarks>
@@ -190,8 +191,9 @@ namespace IBApi.Reactive
 
                 int reqNum = Interlocked.Increment(ref _reqNum);
 
-                var subs = _listener.GetHistoricalData(reqNum, barSizeSetting != "1 day").Subscribe(obs);
-                _sender.reqHistoricalData(reqNum, contract, endDateTime.ToUniversalTime().ToString("yyyyMMdd HH\\:mm\\:ss UTC"), duration, barSizeSetting, whatToShow, useRTH? 1:0, 2, null);
+                bool intraday = barSizeSetting != "1 day";
+                var subs = _listener.GetHistoricalData(reqNum, intraday).Subscribe(obs);
+                _sender.reqHistoricalData(reqNum, contract, endDateTime.ToUniversalTime().ToString("yyyyMMdd HH\\:mm\\:ss UTC"), duration, barSizeSetting, whatToShow, useRTH? 1:0, intraday? 2:1, null);
 
                 return () =>
                 {
