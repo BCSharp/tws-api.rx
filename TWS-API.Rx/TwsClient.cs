@@ -193,7 +193,7 @@ namespace IBApi.Reactive
 
                 bool intraday = barSizeSetting != "1 day";
                 var subs = _listener.GetHistoricalData(reqNum, intraday).Subscribe(obs);
-                _sender.reqHistoricalData(reqNum, contract, endDateTime.ToUniversalTime().ToString("yyyyMMdd HH\\:mm\\:ss 'GMT'"), duration, barSizeSetting, whatToShow, useRTH ? 1 : 0, intraday ? 2 : 1, null);
+                _sender.reqHistoricalData(reqNum, contract, endDateTime.ToUniversalTime().ToString("yyyyMMdd HH\\:mm\\:ss 'GMT'"), duration, barSizeSetting, whatToShow, useRTH ? 1 : 0, intraday ? 2 : 1, false, null);
 
                 return () =>
                 {

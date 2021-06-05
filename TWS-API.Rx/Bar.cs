@@ -17,9 +17,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using IBApi;
-using IBApi.Reactive;
-
 
 namespace IBApi.Reactive
 {

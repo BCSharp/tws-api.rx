@@ -7,13 +7,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using IBApi;
-using IBApi.Reactive;
 
 namespace IBApi.Reactive
 {
     class TwsSender : EClientSocket
     {
-        public TwsSender(EWrapper listener) : base(listener) {}
+        public TwsSender(EWrapper listener) : base(listener, new EReaderMonitorSignal()) {}
     }
 }

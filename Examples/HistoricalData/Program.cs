@@ -16,6 +16,7 @@ using System.Threading.Tasks;
 
 using IBApi;
 using IBApi.Reactive;
+using Bar = IBApi.Reactive.Bar;
 
 namespace HistoricalData
 {

@@ -17,9 +17,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using IBApi;
-using IBApi.Reactive;
-
 
 namespace IBApi.Reactive
 {
@@ -29,7 +26,7 @@ namespace IBApi.Reactive
     public class PositionLine
     {
         // TODO: replace by primary constructor in C# 6.0
-        public PositionLine(string accountName, string secType, string symbol, string series, int position, 
+        public PositionLine(string accountName, string secType, string symbol, string series, decimal position, 
                             decimal price, decimal value, decimal averageCost, decimal unrealizedProfit, decimal realizedProfit)
         {
             AccountName = accountName;
@@ -48,7 +45,7 @@ namespace IBApi.Reactive
         public string SecType { get; private set; }
         public string Symbol { get; private set; }
         public string Series { get; private set; }
-        public int Position { get; private set; }
+        public decimal Position { get; private set; }
         public decimal Price { get; private set; }
         public decimal Value { get; private set; }
         public decimal AverageCost { get; private set; }
