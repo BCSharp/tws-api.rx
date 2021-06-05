@@ -17,8 +17,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using IBApi;
-using IBApi.Reactive;
 using System.Collections.Concurrent;
 using System.Globalization;
 
@@ -194,7 +192,7 @@ namespace IBApi.Reactive
             _historicalDataDict.TryRemove(reqId, out historical_data);
         }
 
-        public override void historicalData(int reqId, string date, double open, double high, double low, double close, int volume, int count, double WAP, bool hasGaps)
+        public override void historicalData(int reqId, IBApi.Bar bar)
         {
             Tuple<ISubject<Bar>, bool> historical_data;
             if (_historicalDataDict.TryGetValue(reqId, out historical_data))
@@ -202,14 +200,14 @@ namespace IBApi.Reactive
                 DateTime timestamp;
                 if (historical_data.Item2) // intraday
                 {
-                    long epochtime = long.Parse(date); // the "date" string is in Epoch seconds
+                    long epochtime = long.Parse(bar.Time); // the "time" string is in Epoch seconds
                     timestamp = Epoch.AddSeconds(epochtime);
                 }
                 else
                 {
-                    timestamp = DateTime.ParseExact(date, "yyyyMMdd", DateTimeFormatInfo.InvariantInfo);
+                    timestamp = DateTime.ParseExact(bar.Time, "yyyyMMdd", DateTimeFormatInfo.InvariantInfo);
                 }
-                historical_data.Item1.OnNext(new Bar(timestamp.Ticks, (decimal)open + Zero00, (decimal)high + Zero00, (decimal)low + Zero00, (decimal)close + Zero00, volume, (decimal)WAP));
+                historical_data.Item1.OnNext(new Bar(timestamp.Ticks, (decimal)bar.Open + Zero00, (decimal)bar.High + Zero00, (decimal)bar.Low + Zero00, (decimal)bar.Close + Zero00, bar.Volume, (decimal)bar.WAP));
             }
         }
 
@@ -336,7 +334,7 @@ namespace IBApi.Reactive
         }
 
 
-        public override void updatePortfolio(Contract contract, int position, double marketPrice, double marketValue,
+        public override void updatePortfolio(Contract contract, double position, double marketPrice, double marketValue,
                                              double averageCost, double unrealizedPNL, double realizedPNL, string accountName)
         {
             try
@@ -346,8 +344,8 @@ namespace IBApi.Reactive
                     accountName,
                     contract.SecType,
                     contract.Symbol,
-                    contract.Expiry,
-                    position,
+                    contract.LastTradeDateOrContractMonth + contract.Right + (contract.Strike != 0 ? contract.Strike.ToString() : ""),
+                    (decimal)position,
                     (decimal)marketPrice + Zero00,
                     (decimal)marketValue + Zero00,
                     (decimal)averageCost + Zero00,
